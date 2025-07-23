@@ -1,0 +1,210 @@
+version: "3.7"
+
+services:
+ 
+  mongodb:
+    image: mongo:7
+    container_name: mongo-db
+    ports: 
+      - 27017:27017 
+    networks: 
+      tgcp: 
+        aliases: 
+          - mongodb 
+    volumes:
+      - ./mongo/vol-mongo-db:/data/db
+      - ./mongo/vol-mongo-configdb:/data/configdb
+ 
+  rabbitmq: 
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports: 
+      - 5672:5672 
+      - 15672:15672 
+    networks: 
+      tgcp: 
+        aliases: 
+          - rabbitmq-elera-client 
+          - rabbitmq-elera-platform 
+ 
+  elera-platform: 
+    image: tgcseleraacr.azurecr.io/elera-platform:1.2502.11593-2025.3.29-4f27cc6
+    container_name: elera-platform
+    ports: 
+      - 8081:8080
+      - 5005:5005
+      - 1089:1089
+    networks: 
+      tgcp: 
+        aliases: 
+          - pinpad-management
+          - serviceability
+          - elera-platform
+          - cash-management
+          - configurations
+          - import-export
+          - devices
+          - associate-tracking
+          - transactions
+          - receipts
+          - permissions
+          - bin-lookup
+          - stored-value
+          - fulfillments
+          - inventory
+          - catalogs
+          - customers
+          - payments
+          - print
+          - pos  
+          - authorization
+          - orders
+          - deposit-refund
+          - endpoint-status
+          - changeplans
+          - pricelists
+          - promotions
+          - order-validation
+          - scheduler
+          - system-management
+          - administration_ui
+          - business_days
+          - import_export
+          - tax
+          - shipping
+          - datasync-consumer
+          - transaction-importer
+          - administration-ui
+          - business-days
+          - quick-lookup
+          - barcode-translation
+          - websockets
+          - wic-apl
+          - audios
+          - images
+          - currency-conversion
+          - terminal-reports
+          - not-on-file
+          - ema
+          - terminal-security
+          - wic-hcl
+    entrypoint: 
+      - java 
+      - -Dtgcp.pharmacy-rx=mock
+      - -Dmongodb-port=27017 
+      - -Dmongodb-service=mongodb 
+      - -Dmongodb-name=elera-platform 
+      - -Dtgcp.authorization.secret=DEV_SECRET 
+      - -Drabbitmq-host=rabbitmq-elera-client 
+      - -Drabbitmq-port=5672 
+      - -Dtgcp.messaging.impl=rabbitmq 
+      - -DserviceNameOverrideForCollapsedMode=elera-platform 
+      - -Dtgcp.cache.distributed.enabled=false 
+      - -Xms100m 
+      - -Xmx1G
+      - -Dtgcp.shipping.mock=true
+      - org.springframework.boot.loader.JarLauncher
+    depends_on:
+      - mongodb
+      - rabbitmq
+ 
+  elera-client: 
+    image: tgcseleraacr.azurecr.io/elera-client:1.2502.10075-2025.3.29-bb482bd6f
+    container_name: elera-client
+    ports: 
+      - 8082:8080 
+    networks: 
+      tgcp: 
+        aliases: 
+          - webpos 
+    entrypoint: 
+      - java 
+      - -Dtgcp.shipping.mock=true
+      - -Ddevices.service=elera-platform 
+      - -Dconfigurations.service=elera-platform 
+      - -Dendpoint-status.service=elera-platform 
+      - -Dreceipts.service=elera-platform 
+      - -Dassociate-tracking.service=elera-platform 
+      - -Dtransactions.service=elera-platform 
+      - -Dmongodb-port=27017 
+      - -Dmongodb-service=mongodb 
+      - -Dmongodb-name=tgcp-elera 
+      - -Dcache-port=11211 
+      - -Dtgcp.authorization.secret=DEV_SECRET 	      
+      - -Drabbitmq-host=rabbitmq-elera-client 
+      - -Drabbitmq-port=5672 
+      - -Dtgcp.messaging.impl=rabbitmq 
+      - -Xms100m 
+      - -Xmx300m 
+      - -jar 
+      - app.war 
+    depends_on: 
+      - elera-platform 
+ 
+  administration-ui-all: 
+    image: tgcseleraacr.azurecr.io/elera-system-administration-ui-all:1.2502.3019-2025.3.29-83428673
+    container_name: elera-admin-ui
+    networks: 
+      tgcp: 
+        aliases:
+          - import-export-admin-ui
+          - admin-ui
+          - pinpad-management-admin-ui
+          - images-admin-ui
+          - audios-admin-ui
+          - scheduler-admin-ui
+          - system-management-admin-ui
+          - store-catalog-admin-ui
+          - tax-vat-admin-ui
+          - tax-admin-ui
+          - receipts-admin-ui
+          - promotions-admin-ui
+          - pricelists-admin-ui
+          - order-validation-admin-ui
+          - electronic-journal-admin-ui
+          - configurations-admin-ui
+          - changeplans-admin-ui
+          - catalogs-admin-ui
+          - cash-management-admin-ui
+          - bin-lookup-admin-ui
+          - permissions-admin-ui
+          - authorization-admin-ui
+          - customers-admin-ui
+          - quick-lookup-admin-ui
+          - electronic-journal
+          - not-on-file-admin-ui
+          - terminal-reports-admin-ui
+          - terminal-security-admin-ui
+
+  nginx:
+    container_name: elera-nginx
+    image: tgcseleraacr.azurecr.io/elera-system-nginx:1.2502.3019-2025.3.29-83428673
+    ports:
+      - 8080:80
+    depends_on:
+      - elera-platform
+      - elera-client
+      - administration-ui-all
+    networks:
+      tgcp:
+        aliases:
+          - tgcp-webpos
+
+  # ⭐ DATA-LOADER - SOLO PARA PRIMERA VEZ
+  data-loader:
+    image: tgcseleraacr.azurecr.io/elera-platform-data-loader:1.2502.11593-2025.3.29-4f27cc6
+    container_name: elera-data-loader
+    networks:
+      tgcp:
+    depends_on:
+      - elera-platform
+      - mongodb
+    restart: "no"
+      
+networks:
+  tgcp:
+    driver: bridge
+
+volumes:
+  vol-mongo-db:
+  vol-mongo-configdb:
